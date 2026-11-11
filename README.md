@@ -5,13 +5,22 @@ Data lives in a local Postgres database. You use it through a web page or the `t
 
 ## Setup
 
-Needs Node 22+ and a running Postgres (Homebrew's `postgresql@18` works out of the box).
+Needs Node 22+ and a running Postgres (Homebrew's `postgresql@18` works out of the box:
+`brew install postgresql@18 && brew services start postgresql@18`).
+
+The page, the server and the `track` command run anywhere Node and Postgres do. The
+[auto-update](#auto-update) is macOS only: it's a launchd job, and it logs to `~/Library/Logs`.
 
 ```bash
 npm install
 npm run setup      # creates the project_tracking database and its tables
 npm start          # http://localhost:4567
 ```
+
+`npm run dev` does the same but restarts the server whenever a file changes. Either way the server prints its
+errors in that terminal, and stops when you close it. Keep it running while you work: scheduled reviews and
+daily statuses only run while the server is up. The auto-update and the `track` command don't need it.
+To update, pull and restart the server. The schema is applied on every start, so there's no migration step.
 
 Settings, all optional:
 
@@ -45,6 +54,33 @@ Claude Code headlessly (`claude -p`) and need:
 Without `code-review`, the reviews have no skill to run. Without `daily-status`, the daily status can't be written,
 and the auto-update still syncs tickets but names its log step as failed.
 
+## First steps
+
+1. **Add a project for each client** with **New project** on the page, or `track project add "Acme Co"`.
+   Give it the same name as the client's folder in `~/Desktop/repos`. Names are compared in lowercase with
+   anything that isn't a letter or digit turned into `-`, so "Acme Co" matches `acme-co`. See
+   [how projects are matched](#how-projects-are-matched-to-your-repos) for why this matters.
+2. **Add tasks** with **N** on the page, or `track add acme-co "Checkout page redesign"`. Work that isn't
+   for a client goes to Common (`track add common "..."`).
+3. *(Optional)* **Show your pull requests:** install the GitHub CLI and run `gh auth login`.
+4. *(Optional)* **Sync tickets and log work automatically:** give each project its Jira site or Linear team in
+   the project dialog (or `track project jira acme-co acme.atlassian.net` / `track project linear acme-co "Acme"`),
+   then `npm run auto:install`. Try one run straight away with `npm run auto:run`. This and the Claude reviews
+   and daily status need the [Claude features](#claude-features-optional) set up.
+
+### How projects are matched to your repos
+
+The tracker has no settings for repo paths. It finds a project's work by its name:
+
+- **Pull requests** are matched by the clone's folder in `~/Desktop/repos` (or `REPOS_DIR`), then the GitHub
+  org, then the repo name, ignoring dashes and case. A PR that matches nothing is still listed, without a project.
+- **The auto-update's work log and the daily status** group the day's work by folder, and the auto-update logs
+  each folder's work to the project with that name. A client folder with no matching project gets a new
+  project, so a project named differently from its folder can end up with a duplicate.
+
+If a name doesn't match, rename the project (in its dialog, or `track project rename <project> <new name>`)
+rather than the folder.
+
 ## The page
 
 - **Summary**: open, in progress, waiting, overdue, and done this week. Click a project to filter everything to it.
@@ -77,6 +113,15 @@ and the auto-update still syncs tickets but names its log step as failed.
   tracker's own entries for the day fold away under it.
 - **Archived projects**: at the bottom. Archiving hides a project from the board and the summary but keeps
   its tasks and history. Restore it from there. Adding a new task to an archived project restores it.
+  **Delete** there removes the project with all its tasks, notes and history, after a second click. Only an
+  archived project can be deleted, and Common can't be.
+
+Deleting is always two clicks: the button asks once more before it acts. That goes for a task (**Delete** in
+its dialog), a logged entry in **What I did** (the **×** next to it; entries the tracker wrote itself, like
+"Started", can't be deleted), a note, and a project.
+
+Keyboard: **N** opens a new task (when you're not typing). In a note, **⌘↩** (Ctrl+Enter) saves and **Esc**
+stops editing. **Esc** closes any dialog.
 
 The page refreshes every 15 seconds, so changes made from the terminal show up on their own. **Refresh** in
 the top bar reloads everything at once and asks GitHub again instead of using its one-minute cache. It
@@ -108,8 +153,24 @@ track note pin 3        track note edit 3 "..."        track note rm 3
 track help
 ```
 
-A project can be named by its full name, its repo folder name (`acme-co`), part of the name
-(`acme`), or its id. Add `--json` to `ls`, `recent`, `projects` and `show` for machine-readable output.
+More commands:
+
+```bash
+track ls --all                          # also tasks done in the last 14 days
+track add acme-co "Fix login" --status doing   # start it straight away
+track show 12                           # one task with its notes
+track rm 12                             # delete a task
+track project add "Acme Co" --color teal
+track project rename acme "Acme Corp"   # and: track project color acme rose
+track project jira acme-co acme.atlassian.net   # where the auto-update reads tickets (none clears it)
+track project linear globex "Globex"
+track runs                              # the last 10 auto-update runs, with cost
+track state                             # everything the page sees, as JSON
+```
+
+`track help` lists every command and option. A project can be named by its full name, its repo folder name
+(`acme-co`), part of the name (`acme`), or its id. Add `--json` to `ls`, `recent`, `projects`, `show`, `notes`
+and `prs` for machine-readable output.
 
 ## Auto-update
 
@@ -220,11 +281,31 @@ or 10 minutes, runs one at a time, and isn't saved as a Claude Code session. A f
 last lists and shows why it failed. Hover the "Written" time for the model and cost. Settings are at the
 top of `lib/daily.js`.
 
+## Troubleshooting
+
+- **"Can't reach Postgres"**: Postgres isn't running. Start it with `brew services start postgresql@18`, or set
+  `DATABASE_URL` if yours runs elsewhere.
+- **"The database ... doesn't exist yet"**: run `npm run setup`.
+- **`EADDRINUSE` when starting**: something else is on port 4567, often a server you started earlier.
+  Stop that one (`lsof -i :4567` shows it) or set `PORT`.
+- **The page shows an error in the pull request section**: `gh` is missing or signed out. Run `gh auth login`.
+  The rest of the page works without it.
+- **A project shows no PRs, or the auto-update created a duplicate project**: its name doesn't match the repo
+  folder. See [how projects are matched](#how-projects-are-matched-to-your-repos).
+- **"This server only answers on localhost"**: open http://localhost:4567, not your machine's network address
+  or a tunnel. The server refuses anything else on purpose.
+- **The auto-update didn't run**: check `~/Library/Logs/project-tracking/auto-update.log` (and `launchd.log`
+  next to it), and `track runs`. It only runs on weekdays from 09:00 to 19:00 while the Mac is awake. After
+  switching Node versions or moving the repo, run `npm run auto:install` again.
+- **A review or daily status failed**: the review's dialog or the day's heading says why. **Try again** runs
+  it again. The server's terminal has the full error.
+
 ## Data
 
 Tables are defined in `db/schema.sql` and applied on every start:
 
-- `projects`: name, color, `archived_at` (null while in use), `is_common` (true for Common only)
+- `projects`: name, color, `archived_at` (null while in use), `is_common` (true for Common only),
+  `jira_site` and `linear_team` (where the auto-update reads its tickets)
 - `tasks`: title, status (`todo`, `doing`, `waiting`, `done`), priority, due date, link, notes, `done_at`
 - `activity`: every status change, written automatically, plus actions you log by hand
   (`kind = 'logged'`). `source` is `manual` or `auto`; `ref` keys auto-update entries.
