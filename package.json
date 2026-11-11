@@ -1,0 +1,25 @@
+{
+  "name": "project-tracking",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local tracker for client projects: what to do, what got done, and how far along each project is",
+  "type": "module",
+  "bin": {
+    "track": "./bin/track.js"
+  },
+  "scripts": {
+    "setup": "node scripts/setup-db.js",
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "track": "node bin/track.js",
+    "auto:install": "node scripts/install-auto-update.js",
+    "auto:uninstall": "node scripts/install-auto-update.js --uninstall",
+    "auto:run": "node scripts/auto-update.js --now"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  }
+}

@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Client Workbench</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='5' width='7' height='22' rx='2' fill='%233446d4'/%3E%3Crect x='12.5' y='5' width='7' height='15' rx='2' fill='%230a78a8'/%3E%3Crect x='22' y='5' width='7' height='9' rx='2' fill='%232e8550'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <script>
+    try {
+      const theme = localStorage.getItem('workbench.theme');
+      if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+    } catch {}
+  </script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="3" y="5" width="7" height="22" rx="2" />
+        <rect x="12.5" y="5" width="7" height="15" rx="2" />
+        <rect x="22" y="5" width="7" height="9" rx="2" />
+      </svg>
+      <h1>Client Workbench</h1>
+    </div>
+    <p class="today" id="today"></p>
+    <div class="topbar-actions">
+      <span class="sync" id="auto-run" hidden></span>
+      <span class="sync" id="sync" role="status"></span>
+      <button class="btn ghost small" id="refresh-all" type="button" title="Reload tasks, notes and pull requests, with a fresh check of GitHub">Refresh</button>
+      <button class="btn ghost icon-btn" id="theme-toggle" type="button" aria-label="Switch to dark theme" title="Switch theme">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3a7 7 0 1 0 7 7 5.5 5.5 0 0 1-7-7Z" /></svg>
+      </button>
+      <button class="btn primary" id="new-task" type="button">New task <kbd>N</kbd></button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="banner" id="banner" hidden></div>
+
+    <section class="summary" id="summary" aria-label="Summary"></section>
+
+    <section class="projects-section" aria-labelledby="projects-heading">
+      <div class="section-head">
+        <h2 id="projects-heading">Projects</h2>
+        <button class="btn ghost small" id="new-project" type="button">Add project</button>
+      </div>
+      <div class="projects" id="projects"></div>
+    </section>
+
+    <section class="prs-section" aria-labelledby="prs-heading">
+      <div class="section-head">
+        <h2 id="prs-heading">Pull requests</h2>
+        <div class="prs-tools">
+          <span class="sync" id="prs-status" role="status"></span>
+          <button class="btn ghost small" id="run-reviews" type="button" title="Claude reviews every PR waiting on you that it hasn't reviewed yet">Run reviews</button>
+        </div>
+      </div>
+      <p class="prs-error" id="prs-error" hidden></p>
+      <div class="prs" id="prs"></div>
+      <button class="prs-stale-toggle" id="prs-stale" type="button" hidden></button>
+    </section>
+
+    <div class="workspace">
+      <section class="board-section" aria-labelledby="board-heading">
+        <div class="section-head">
+          <h2 id="board-heading">Board</h2>
+          <div class="filter" id="filter"></div>
+        </div>
+        <div class="board" id="board"></div>
+      </section>
+
+      <aside class="sidebar">
+        <section class="notes-section" aria-labelledby="notes-heading">
+          <div class="section-head">
+            <h2 id="notes-heading">Notes</h2>
+            <span class="notes-count num" id="notes-count"></span>
+          </div>
+          <form class="log-form" id="note-form" autocomplete="off">
+            <label class="visually-hidden" for="note-text">Write a note</label>
+            <textarea id="note-text" name="body" rows="10" maxlength="10000" placeholder="Write a note… (⌘↩ to save)" required></textarea>
+            <div class="log-row">
+              <label class="visually-hidden" for="note-project">Project</label>
+              <select id="note-project" name="project_id" required></select>
+              <button class="btn" type="submit">Save note</button>
+            </div>
+          </form>
+          <div class="notes" id="notes"></div>
+        </section>
+
+        <section class="activity-section" aria-labelledby="activity-heading">
+          <div class="section-head">
+            <h2 id="activity-heading">What I did</h2>
+          </div>
+          <figure class="chart" id="chart"></figure>
+          <form class="log-form" id="log-form" autocomplete="off">
+            <label class="visually-hidden" for="log-text">What did you do?</label>
+            <input id="log-text" name="text" type="text" maxlength="500" placeholder="Log something you did, e.g. Call with client about payouts" required>
+            <div class="log-row">
+              <label class="visually-hidden" for="log-project">Project</label>
+              <select id="log-project" name="project_id" required></select>
+              <button class="btn" type="submit">Log it</button>
+            </div>
+          </form>
+          <div class="feed" id="feed"></div>
+        </section>
+      </aside>
+    </div>
+
+    <details class="archive" id="archive">
+      <summary>Archived projects <span class="count" id="archive-count"></span></summary>
+      <p class="archive-note">Archived projects are hidden from the board and the summary. Their tasks and history are kept, and adding a new task to one brings it back.</p>
+      <ul class="archive-list" id="archive-list"></ul>
+    </details>
+  </main>
+
+  <dialog class="sheet" id="task-dialog" aria-labelledby="task-dialog-title">
+    <form id="task-form" method="dialog" autocomplete="off">
+      <header class="sheet-head">
+        <h2 id="task-dialog-title">New task</h2>
+        <button class="btn ghost icon-btn" type="button" data-close aria-label="Close">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" /></svg>
+        </button>
+      </header>
+      <div class="sheet-body">
+        <div class="field">
+          <label for="task-title">Title</label>
+          <input id="task-title" name="title" type="text" maxlength="300" required placeholder="What needs doing?">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="task-project">Project</label>
+            <select id="task-project" name="project_id" required></select>
+          </div>
+          <div class="field">
+            <label for="task-due">Due</label>
+            <input id="task-due" name="due_date" type="date">
+          </div>
+        </div>
+        <fieldset class="field">
+          <legend>Status</legend>
+          <div class="segmented" id="task-status">
+            <label><input type="radio" name="status" value="todo" checked><span>To do</span></label>
+            <label><input type="radio" name="status" value="doing"><span>In progress</span></label>
+            <label><input type="radio" name="status" value="waiting"><span>Waiting</span></label>
+            <label><input type="radio" name="status" value="done"><span>Done</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="field">
+          <legend>Priority</legend>
+          <div class="segmented" id="task-priority">
+            <label><input type="radio" name="priority" value="high"><span>High</span></label>
+            <label><input type="radio" name="priority" value="normal" checked><span>Normal</span></label>
+            <label><input type="radio" name="priority" value="low"><span>Low</span></label>
+          </div>
+        </fieldset>
+        <div class="field">
+          <label for="task-link">Link <span class="optional">Jira ticket, PR or doc</span></label>
+          <input id="task-link" name="link" type="url" maxlength="1000" placeholder="https://">
+        </div>
+        <div class="field">
+          <label for="task-notes">Notes</label>
+          <textarea id="task-notes" name="notes" rows="4" maxlength="5000"></textarea>
+        </div>
+        <p class="form-error" id="task-error" role="alert" hidden></p>
+      </div>
+      <footer class="sheet-foot">
+        <button class="btn danger-ghost" type="button" id="task-delete" hidden>Delete</button>
+        <span class="spacer"></span>
+        <button class="btn ghost" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit" id="task-submit">Add task</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="sheet narrow" id="project-dialog" aria-labelledby="project-dialog-title">
+    <form id="project-form" method="dialog" autocomplete="off">
+      <header class="sheet-head">
+        <h2 id="project-dialog-title">New project</h2>
+        <button class="btn ghost icon-btn" type="button" data-close aria-label="Close">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" /></svg>
+        </button>
+      </header>
+      <div class="sheet-body">
+        <div class="field">
+          <label for="project-name">Name</label>
+          <input id="project-name" name="name" type="text" maxlength="80" required placeholder="Client or project name">
+        </div>
+        <fieldset class="field">
+          <legend>Color</legend>
+          <div class="swatches" id="project-colors"></div>
+        </fieldset>
+        <div class="field">
+          <label for="project-jira">Jira site <span class="optional">tickets for the auto-update</span></label>
+          <input id="project-jira" name="jira_site" type="text" maxlength="200" placeholder="acme.atlassian.net" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="project-linear">Linear team <span class="optional">tickets for the auto-update</span></label>
+          <input id="project-linear" name="linear_team" type="text" maxlength="80" placeholder="Team name" spellcheck="false">
+        </div>
+        <p class="form-error" id="project-error" role="alert" hidden></p>
+      </div>
+      <footer class="sheet-foot">
+        <button class="btn ghost" type="button" id="project-archive" hidden>Archive</button>
+        <span class="spacer"></span>
+        <button class="btn ghost" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit" id="project-submit">Add project</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="sheet wide" id="review-dialog" aria-labelledby="review-dialog-title">
+    <form id="review-form" method="dialog" autocomplete="off">
+      <header class="sheet-head">
+        <div class="review-head">
+          <h2 id="review-dialog-title">Claude's review</h2>
+          <a class="review-pr" id="review-pr" target="_blank" rel="noopener noreferrer"></a>
+        </div>
+        <button class="btn ghost icon-btn" type="button" data-close aria-label="Close">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" /></svg>
+        </button>
+      </header>
+      <div class="sheet-body">
+        <div class="review-summary" id="review-summary"></div>
+        <div class="field" id="review-post-field">
+          <label for="review-text">To post <span class="optional" id="review-text-hint">the verdict and findings; edit before posting</span></label>
+          <textarea id="review-text" rows="6" maxlength="60000"></textarea>
+        </div>
+        <fieldset class="field" id="review-comments-field" hidden>
+          <legend>On their lines <span class="optional">each one posts as a comment on that line of the diff</span></legend>
+          <div class="review-comments" id="review-comments"></div>
+        </fieldset>
+        <p class="review-meta" id="review-meta"></p>
+        <p class="form-error" id="review-error" role="alert" hidden></p>
+      </div>
+      <footer class="sheet-foot wrap">
+        <button class="btn ghost small" type="button" id="review-again">Review again</button>
+        <button class="btn ghost small" type="button" id="review-dismiss">Dismiss</button>
+        <button class="btn ghost small" type="button" id="review-copy">Copy</button>
+        <span class="spacer"></span>
+        <div class="review-actions" id="review-actions">
+          <button class="btn" type="button" data-post="comment">Comment</button>
+          <button class="btn" type="button" data-post="request_changes">Request changes</button>
+          <button class="btn primary" type="button" data-post="approve">Approve</button>
+          <button class="btn" type="button" data-post="approve_comment" hidden>Approve with comment</button>
+          <button class="btn primary" type="button" data-post="approve_only" hidden>Just approve</button>
+        </div>
+      </footer>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-text"></span>
+    <button class="toast-action" id="toast-action" type="button" hidden></button>
+  </div>
+</body>
+</html>
